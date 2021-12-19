@@ -44,9 +44,9 @@ async function mainRequestHandler(request: Request) {
   // Type 2 in a request is an ApplicationCommand interaction.
   // It implies that a user has issued a command.
   if (type === 2) {
-    const categoryOption = data.options?.find((option: { name: string }) =>
-      option.name === "category"
-    );
+    const categoryOption: { value: keyof typeof dongers } = data.options?.find((
+      option: { name: string },
+    ) => option.name === "category");
 
     const dongerArray = dongers[categoryOption?.value] ||
       Object.values(dongers).flat();
