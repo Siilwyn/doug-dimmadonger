@@ -1,34 +1,23 @@
 import { sample } from "https://deno.land/std@0.118.0/collections/mod.ts";
-import {
-  json,
-  serve,
-  validateRequest,
-} from "https://deno.land/x/sift@0.4.2/mod.ts";
+import { serve, Status } from "https://deno.land/std@0.118.0/http/mod.ts";
 import nacl from "https://cdn.skypack.dev/tweetnacl@v1.0.3";
 import { dongers } from "./dongers.ts";
 
-serve({ "/": mainRequestHandler });
-
-async function mainRequestHandler(request: Request) {
-  const { error } = await validateRequest(request, {
-    POST: {
-      headers: ["X-Signature-Ed25519", "X-Signature-Timestamp"],
-    },
-  });
-  if (error) {
-    console.info("Invalid request", { url: request.url, body: request.body });
-    return json({ error: error.message }, { status: error.status });
+serve(async (request) => {
+  if (request.method === "GET") {
+    return new Response("", {
+      status: Status.TemporaryRedirect,
+      headers: { "Location": "https://github.com/Siilwyn/doug-dimmadonger" },
+    });
   }
 
   const { valid, body } = await verifySignature(request);
   if (!valid) {
     console.info("Unsigned request", { url: request.url, body: request.body });
-    return json(
-      { error: "Unsigned request" },
-      {
-        status: 401,
-      },
-    );
+    return json({
+      status: Status.Unauthorized,
+      data: { error: "Unsigned request" },
+    });
   }
 
   const { type = 0, data } = JSON.parse(body);
@@ -36,8 +25,10 @@ async function mainRequestHandler(request: Request) {
   // Discord performs type 1 Ping interactions to test our application.
   if (type === 1) {
     return json({
-      // Response type 1: Pong
-      type: 1,
+      data: {
+        // Response type 1: Pong
+        type: 1,
+      },
     });
   }
 
@@ -52,30 +43,32 @@ async function mainRequestHandler(request: Request) {
       Object.values(dongers).flat();
 
     return json({
-      // Type 4 reponds with the below message retaining the user's
-      // input at the top.
-      type: 4,
       data: {
-        content: sample(dongerArray),
+        // Type 4 reponds with the below message retaining the user's
+        // input at the top.
+        type: 4,
+        data: {
+          content: sample(dongerArray),
+        },
       },
     });
   }
 
-  // We will return a bad request error as a valid Discord request
-  // shouldn't reach here.
   console.info("Bad request", { url: request.url, body: request.body });
-  return json({ error: "Bad request" }, { status: 400 });
-}
+  return json({
+    status: Status.BadRequest,
+    data: { error: "Bad request" },
+  });
+});
 
 async function verifySignature(
   request: Request,
 ): Promise<{ valid: boolean; body: string }> {
   const PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY")!;
-  // Discord sends these headers with every request.
-  const signature = request.headers.get("X-Signature-Ed25519")!;
-  const timestamp = request.headers.get("X-Signature-Timestamp")!;
+  const signature = request.headers.get("X-Signature-Ed25519");
+  const timestamp = request.headers.get("X-Signature-Timestamp");
   const body = await request.text();
-  const valid = nacl.sign.detached.verify(
+  const valid = signature && timestamp && nacl.sign.detached.verify(
     new TextEncoder().encode(timestamp + body),
     hexToUint8Array(signature),
     hexToUint8Array(PUBLIC_KEY),
@@ -86,4 +79,18 @@ async function verifySignature(
 
 function hexToUint8Array(hex: string) {
   return new Uint8Array(hex.match(/.{1,2}/g)!.map((val) => parseInt(val, 16)));
+}
+
+function json(
+  { status = Status.OK, data }: {
+    status?: Status;
+    data: Parameters<typeof JSON.stringify>[0];
+  },
+) {
+  return new Response(JSON.stringify(data), {
+    status: status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
