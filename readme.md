@@ -6,5 +6,5 @@ The fastest Discord bot in the west, powered by
 [Deno Deploy](https://deno.com/deploy). To get you the text emoticons, _aka_
 dongers, you need with `/donger`.
 
-Big thanks to [Donger List](https://dongerlist.com/) &
+Big thanks to [Donger List](http://dongerlist.com/) &
 [Kaomoji](http://kaomoji.ru/).
